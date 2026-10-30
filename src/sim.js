@@ -1,7 +1,7 @@
 // Race engine. Distances are in laps (car.dist = completed laps + lap fraction),
 // times in race seconds. Pure logic, no DOM: the Race view just calls advance().
 export const TIME_SCALE = 4.8 // race seconds per real second at 1x
-const DT = 0.25
+const DT = 0.05
 
 export const COMPOUNDS = {
   S: { name: 'Soft', color: '#ef4444', pace: -0.9, wear: 5.5, dry: true },
@@ -111,8 +111,10 @@ function log(race, msg, car) {
   race.log.length = Math.min(race.log.length, 60)
 }
 
+// Carry the leftover time between frames, or short frames would each run a full tick.
 export function advance(race, seconds) {
-  for (let t = 0; t < seconds && !race.over; t += DT) tick(race)
+  race.acc = (race.acc || 0) + seconds
+  for (; race.acc >= DT && !race.over; race.acc -= DT) tick(race)
 }
 
 function tick(race) {
