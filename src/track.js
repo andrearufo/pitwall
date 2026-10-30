@@ -1,21 +1,38 @@
-// Track geometry: smooth the control points, resample by length, and build a
-// "time fraction" table so cars slow down in corners while lap time stays exact.
+// Track geometry: straights between the control points with every corner
+// filleted by a circular arc, resampled by length, plus a "time fraction" table
+// from a simple physics speed profile (corner speed from radius, limited
+// acceleration and braking) so lap time stays exact.
 const N = 1000
+const M_PER_UNIT = 15 // track space units to metres
+const R = 5 // default corner radius in track units (~75 m)
+const VMAX = 92, A_LAT = 30, A_ACC = 12, A_BRK = 40 // m/s, m/s²
 const cache = new Map()
 
-function catmull(p0, p1, p2, p3, t) {
-  const t2 = t * t, t3 = t2 * t
-  const f = (a, b, c, d) => 0.5 * (2 * b + (c - a) * t + (2 * a - 5 * b + 4 * c - d) * t2 + (3 * b - a - 3 * c + d) * t3)
-  return [f(p0[0], p1[0], p2[0], p3[0]), f(p0[1], p1[1], p2[1], p3[1])]
+// Polygon -> closed outline of straights and arcs. Tight angles or short
+// segments shrink the radius so neighbouring corners never overlap.
+function outline(P) {
+  const out = [], n = P.length
+  for (let i = 0; i < n; i++) {
+    const p = P[i], a = P[(i - 1 + n) % n], b = P[(i + 1) % n]
+    const la = Math.hypot(...sub(a, p)), lb = Math.hypot(...sub(b, p))
+    const u = sub(a, p).map(x => x / la), v = sub(b, p).map(x => x / lb)
+    const half = Math.acos(Math.max(-1, Math.min(1, u[0] * v[0] + u[1] * v[1]))) / 2
+    if (half > 1.55) { out.push(p); continue } // practically straight
+    const t = Math.min(R / Math.tan(half), la * 0.45, lb * 0.45), r = t * Math.tan(half)
+    const bl = Math.hypot(u[0] + v[0], u[1] + v[1])
+    const c = [p[0] + ((u[0] + v[0]) / bl) * (r / Math.sin(half)), p[1] + ((u[1] + v[1]) / bl) * (r / Math.sin(half))]
+    const A = [p[0] + u[0] * t, p[1] + u[1] * t], B = [p[0] + v[0] * t, p[1] + v[1] * t]
+    const a0 = Math.atan2(A[1] - c[1], A[0] - c[0])
+    let d = Math.atan2(B[1] - c[1], B[0] - c[0]) - a0
+    d = Math.atan2(Math.sin(d), Math.cos(d)) // shortest way round
+    for (let k = 0; k <= 12; k++) out.push([c[0] + r * Math.cos(a0 + (d * k) / 12), c[1] + r * Math.sin(a0 + (d * k) / 12)])
+  }
+  return out
 }
 
 export function geometry(track) {
   if (cache.has(track.id)) return cache.get(track.id)
-  const P = track.pts, n = P.length
-  const raw = []
-  for (let i = 0; i < n; i++)
-    for (let s = 0; s < 40; s++)
-      raw.push(catmull(P[(i - 1 + n) % n], P[i], P[(i + 1) % n], P[(i + 2) % n], s / 40))
+  const raw = outline(track.pts)
 
   // resample uniformly by arc length
   const cum = [0]
@@ -30,17 +47,26 @@ export function geometry(track) {
     pts.push([a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t])
   }
 
-  // speed factor from curvature (turning angle over a short window), smoothed
-  const W = 6
+  // corner speed from the radius through 3 nearby points
+  const ds = (len / N) * M_PER_UNIT, W = 4
   let speed = pts.map((_, i) => {
     const a = pts[(i - W + N) % N], b = pts[i], c = pts[(i + W) % N]
-    const h1 = Math.atan2(b[1] - a[1], b[0] - a[0]), h2 = Math.atan2(c[1] - b[1], c[0] - b[0])
-    let turn = Math.abs(h2 - h1)
-    if (turn > Math.PI) turn = 2 * Math.PI - turn
-    return 1 / (1 + turn * 2.2)
+    const ab = Math.hypot(...sub(b, a)), bc = Math.hypot(...sub(c, b)), ca = Math.hypot(...sub(a, c))
+    const area2 = Math.abs((b[0] - a[0]) * (c[1] - a[1]) - (b[1] - a[1]) * (c[0] - a[0]))
+    const r = area2 < 1e-9 ? Infinity : ((ab * bc * ca) / (2 * area2)) * M_PER_UNIT
+    return Math.min(VMAX, Math.sqrt(A_LAT * r))
   })
-  for (let pass = 0; pass < 3; pass++)
-    speed = speed.map((_, i) => (speed[(i - 2 + N) % N] + speed[(i - 1 + N) % N] + speed[i] + speed[(i + 1) % N] + speed[(i + 2) % N]) / 5)
+  // braking into corners (backward) and accelerating out of them (forward); twice to wrap around
+  for (let pass = 0; pass < 2; pass++) {
+    for (let i = 2 * N - 1; i >= 0; i--) {
+      const k = i % N
+      speed[k] = Math.min(speed[k], Math.sqrt(speed[(k + 1) % N] ** 2 + 2 * A_BRK * ds))
+    }
+    for (let i = 0; i < 2 * N; i++) {
+      const k = i % N, v = speed[(k - 1 + N) % N]
+      speed[k] = Math.min(speed[k], Math.sqrt(v ** 2 + 2 * (A_ACC * (1 - (v / VMAX) ** 2) + 0.3) * ds))
+    }
+  }
 
   // start/finish line in the middle of the fastest stretch
   const win = Math.round(N * 0.1)
@@ -111,15 +137,15 @@ export function drawTrack(ctx, track, w, h, wet = 0) {
   for (let u = -0.05; u <= 0.05; u += 0.005) { const p = pitPoint(g, u); pit.push([p.x, p.y]) }
   path(pit, false)
   ctx.strokeStyle = '#3a3f4b'
-  ctx.lineWidth = s * 1.6
+  ctx.lineWidth = s * 1.1
   ctx.stroke()
 
   path(g.pts)
   ctx.strokeStyle = '#11141a'
-  ctx.lineWidth = s * 3.6
+  ctx.lineWidth = s * 2.6
   ctx.stroke()
   ctx.strokeStyle = wet > 0.15 ? `rgb(${60 - wet * 20}, ${68 - wet * 10}, ${84 + wet * 30})` : '#474d5a'
-  ctx.lineWidth = s * 2.6
+  ctx.lineWidth = s * 1.8
   ctx.stroke()
 
   // start/finish line

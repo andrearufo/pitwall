@@ -1,6 +1,6 @@
 // Race engine. Distances are in laps (car.dist = completed laps + lap fraction),
 // times in race seconds. Pure logic, no DOM: the Race view just calls advance().
-export const TIME_SCALE = 4.8 // race seconds per real second at 1x
+export const TIME_SCALE = 1 // race seconds per real second at 1x
 const DT = 0.05
 
 export const COMPOUNDS = {

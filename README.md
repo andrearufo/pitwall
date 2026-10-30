@@ -6,8 +6,8 @@ A browser racing-team management game. Pick one of 10 fictional teams, develop t
 
 ## Features
 
-- 12 fictional circuits, 12-race seasons, endless careers (new regulations each season pull the field together)
-- Real-time races (~8 min at 1×, up to 16×): push / normal / save modes, pit calls, auto-pit strategy
+- 12 fictional circuits (straights and filleted corners; cars brake into corners and accelerate out of them), 12-race seasons, endless careers (new regulations each season pull the field together)
+- Races in real time at 1× (laps of 1:16–1:32, ~35 min per race; up to 16×): push / normal / save modes, pit calls, auto-pit strategy
 - Soft / Medium / Hard / Inter / Wet tyres with wear, and the two-dry-compound rule (30s penalty)
 - Variable weather with forecasts, safety car, mechanical failures, driver errors and crashes
 - Simulated qualifying sets the grid
