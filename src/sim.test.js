@@ -2,8 +2,11 @@
 // Run with `npm test`.
 import assert from 'node:assert/strict'
 import { TEAMS, DRIVERS, TRACKS } from './data.js'
-import { createRace, advance, genWeather, qualify, classify, TIME_SCALE } from './sim.js'
+import { createRace, advance, genWeather, qualify, classify, fmtTime, TIME_SCALE } from './sim.js'
 import { geometry } from './track.js'
+
+assert.equal(fmtTime(59.9996), '1:00.000')
+assert.equal(fmtTime(83.4567), '1:23.457')
 
 const entries = DRIVERS.map(d => ({ driver: d, team: TEAMS.find(t => t.id === d.team) }))
 let dnf = 0, stops = 0, minutes = 0, wins = {}

@@ -226,7 +226,7 @@ function crossLine(race, car) {
   car.noise = gauss() * (0.12 + (100 - car.driver.cons) * 0.008)
 
   if (race.finished || lap >= race.laps) {
-    if (!race.finished) log(race, `🏁 ${car.driver.code} wins!`, car)
+    if (!race.finished) log(race, `🏁 ${car.driver.code} takes the chequered flag`, car)
     race.finished = true
     car.dist = lap
     car.finishTime = race.time
@@ -281,8 +281,8 @@ export function dryChoice(race, car, left) {
 
 export function fmtTime(s) {
   if (s == null) return '—'
-  const m = Math.floor(s / 60)
-  return (m ? m + ':' + (s % 60).toFixed(3).padStart(6, '0') : (s % 60).toFixed(3))
+  const ms = Math.round(s * 1000), m = Math.floor(ms / 60000), sec = ((ms % 60000) / 1000).toFixed(3)
+  return m ? m + ':' + sec.padStart(6, '0') : sec
 }
 
 // Final classification with display status.
