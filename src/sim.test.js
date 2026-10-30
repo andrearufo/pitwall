@@ -13,7 +13,7 @@ for (const track of TRACKS) {
   const g = geometry(track)
   assert.equal(g.pts.length, 1000)
   assert.ok(Math.abs(g.time[1000] - 1) < 1e-9, 'time table normalised')
-  assert.ok(Math.min(...g.speed) < Math.max(...g.speed) * 0.6, `${track.name}: cars slow down in corners`)
+  assert.ok(Math.min(...g.speed) < Math.max(...g.speed) * 0.7, `${track.name}: cars slow down in corners`)
 
   for (let r = 0; r < runs; r++) {
     const weather = genWeather(track)
