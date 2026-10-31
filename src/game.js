@@ -53,6 +53,7 @@ export function applyResult(g, classification) {
   }
   g.results.push({ round: g.round, track: g.calendar[g.round], top: classification.slice(0, 3).map(r => r.driverId) })
   g.round++
+  delete g.weekend
   for (const t of g.teams) if (t.id !== g.player) aiSpend(g, t)
   save(g)
   return income[g.player]

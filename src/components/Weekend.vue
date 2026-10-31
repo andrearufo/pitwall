@@ -1,6 +1,6 @@
 <script setup>
-import { ref, markRaw, toRaw } from 'vue'
-import { track, entries, team, applyResult } from '../game.js'
+import { ref, markRaw, toRaw, onMounted, onBeforeUnmount } from 'vue'
+import { track, entries, team, applyResult, save } from '../game.js'
 import { genWeather, qualify, createRace, classify, fmtTime, COMPOUNDS, idealWet } from '../sim.js'
 import { POINTS } from '../data.js'
 import TrackMap from './TrackMap.vue'
@@ -12,26 +12,51 @@ const g = props.game
 const t = track(g.calendar[g.round])
 const me = team(g, g.player)
 const round = g.round + 1
-const weather = genWeather(t)
-const stage = ref('preview')
-const grid = ref([])
-const tyres = ref({})
-const race = ref(null)
-const result = ref(null)
-const income = ref(0)
 
 // The race runs on plain (non-reactive) copies of teams and drivers.
 const raw = () => entries(g).map(e => ({ ...e, driver: { ...toRaw(e.driver) }, team: { ...toRaw(e.team) } }))
 
+// Weather, qualifying and the race in progress are saved, so reloading the
+// page resumes the weekend instead of re-rolling it.
+const plain = o => JSON.parse(JSON.stringify(o))
+const saved = g.weekend?.season === g.season && g.weekend.round === g.round ? plain(g.weekend) : null
+if (!saved) {
+  g.weekend = { season: g.season, round: g.round, weather: genWeather(t) }
+  save(g)
+}
+const weather = saved?.weather || plain(g.weekend.weather)
+const stage = ref(saved?.race ? 'race' : saved?.grid ? 'quali' : 'preview')
+const grid = ref(saved?.grid ? saved.grid.map(({ id, time }) => ({ ...raw().find(e => e.driver.id === id), time })) : [])
+const tyres = ref(Object.fromEntries(grid.value.filter(e => e.player).map(e => [e.driver.id, idealWet(weather.start) || 'M'])))
+const race = ref(saved?.race ? markRaw(saved.race) : null)
+const result = ref(null)
+const income = ref(0)
+
 function runQuali() {
   grid.value = qualify(t, raw(), weather.quali)
   for (const e of grid.value) if (e.player) tyres.value[e.driver.id] = idealWet(weather.start) || 'M'
+  g.weekend.grid = grid.value.map(e => ({ id: e.driver.id, time: e.time }))
+  save(g)
   stage.value = 'quali'
 }
 function startRace() {
   race.value = markRaw(createRace(t, grid.value.map(e => ({ ...e, tyre: e.player ? tyres.value[e.driver.id] : undefined })), weather))
   stage.value = 'race'
+  saveRace()
 }
+// Snapshot the live race when the page is hidden or closed (reload included).
+function saveRace() {
+  if (stage.value === 'race') save({ ...toRaw(g), weekend: { ...toRaw(g.weekend), race: race.value } })
+}
+const onHide = () => document.visibilityState === 'hidden' && saveRace()
+onMounted(() => {
+  addEventListener('pagehide', saveRace)
+  document.addEventListener('visibilitychange', onHide)
+})
+onBeforeUnmount(() => {
+  removeEventListener('pagehide', saveRace)
+  document.removeEventListener('visibilitychange', onHide)
+})
 function finish() {
   result.value = classify(race.value)
   income.value = applyResult(g, result.value)

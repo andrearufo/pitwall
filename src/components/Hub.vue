@@ -54,7 +54,7 @@ function upgrade(stat) {
             <span>{{ next.laps }} laps</span>
             <span v-for="tag in tags(next)" :key="tag">· {{ tag }}</span>
           </div>
-          <button class="primary" @click="emit('race')">Go to race weekend →</button>
+          <button class="primary" @click="emit('race')">{{ g.weekend?.round === g.round && g.weekend.season === g.season ? 'Resume race weekend' : 'Go to race weekend' }} →</button>
         </div>
         <div class="panel">
           <h3>Your drivers</h3>
